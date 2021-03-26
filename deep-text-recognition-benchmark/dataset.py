@@ -26,15 +26,18 @@ class Batch_Balanced_Dataset(object):
         print(f'dataset_root: {opt.train_data}\nopt.select_data: {opt.select_data}\nopt.batch_ratio: {opt.batch_ratio}')
         assert len(opt.select_data) == len(opt.batch_ratio)
 
-        _AlignCollate = AlignCollate(imgH=opt.imgH, imgW=opt.imgW, keep_ratio_with_pad=opt.PAD)
+
+        _AlignCollate = AlignCollate(imgH=opt.imgH, imgW=opt.imgW, keep_ratio_with_pad=opt.PAD) # image 조절
         self.data_loader_list = []
         self.dataloader_iter_list = []
         batch_size_list = []
         Total_batch_size = 0
         for selected_d, batch_ratio_d in zip(opt.select_data, opt.batch_ratio):
             _batch_size = max(round(opt.batch_size * float(batch_ratio_d)), 1)
+
             print('-' * 80)
             _dataset = hierarchical_dataset(root=opt.train_data, opt=opt, select_data=[selected_d])
+
             total_number_dataset = len(_dataset)
 
             """
@@ -89,8 +92,10 @@ class Batch_Balanced_Dataset(object):
 def hierarchical_dataset(root, opt, select_data='/'):
     """ select_data='/' contains all sub-directory of root directory """
     dataset_list = []
+
     print(f'dataset_root:    {root}\t dataset: {select_data[0]}')
     for dirpath, dirnames, filenames in os.walk(root+'/'):
+
         if not dirnames:
             select_flag = False
             for selected_d in select_data:
@@ -102,6 +107,8 @@ def hierarchical_dataset(root, opt, select_data='/'):
                 dataset = LmdbDataset(dirpath, opt)
                 print(f'sub-directory:\t/{os.path.relpath(dirpath, root)}\t num samples: {len(dataset)}')
                 dataset_list.append(dataset)
+
+
 
     concatenated_dataset = ConcatDataset(dataset_list)
 
@@ -115,6 +122,7 @@ class LmdbDataset(Dataset):
         self.root = root
         self.opt = opt
         self.env = lmdb.open(root, max_readers=32, readonly=True, lock=False, readahead=False, meminit=False)
+
         if not self.env:
             print('cannot create lmdb from %s' % (root))
             sys.exit(0)

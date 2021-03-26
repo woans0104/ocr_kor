@@ -28,15 +28,45 @@ def create_strings_from_dict(length, allow_variable, count, lang_dict):
     """
         Create all strings by picking X random word in the dictionnary
     """
-
+    lang_dict = lang_dict[0]
     dict_len = len(lang_dict)
     strings = []
     for _ in range(0, count):
         current_string = ""
         for _ in range(0, rnd.randint(1, length) if allow_variable else length):
             current_string += lang_dict[rnd.randrange(dict_len)]
-            current_string += ' '
-        strings.append(current_string[:-1])
+            current_string += ''
+        strings.append(current_string)
+    return strings
+
+def create_strings_from_dict_v2(length, allow_variable, count, lang_dict):
+    """
+        Create all strings by picking X random word in the dictionnary
+    """
+
+
+    dict1,dict2 = lang_dict[0], lang_dict[1]
+
+    dict1_len = len(dict1)
+    dict2_len = len(dict2)
+
+    strings = []
+
+    check = 'no_1'
+
+    for _ in range(0, count):
+        current_string = ""
+        for _ in range(0, rnd.randint(1, length+1) if allow_variable else length+1):
+            if check == 'no_1':
+                current_string += dict1[rnd.randrange(dict1_len)]
+                current_string += ' '
+                check = 'no_2'
+            else:
+                current_string += dict2[rnd.randrange(dict2_len)]
+                current_string += ' '
+                check = 'no_1'
+        strings.append(current_string)
+
     return strings
 
 def create_strings_from_wikipedia(minimum_length, count, lang):
@@ -103,6 +133,45 @@ def create_strings_randomly(length, allow_variable, count, let, num, sym, lang):
         for _ in range(0, rnd.randint(1, length) if allow_variable else length):
             seq_len = rnd.randint(min_seq_len, max_seq_len)
             current_string += ''.join([rnd.choice(pool) for _ in range(seq_len)])
+            current_string += ' '
+        strings.append(current_string[:-1])
+    return strings
+
+
+def create_strings_randomly_v2(length, allow_variable, count, let, num, sym, lang):
+    """
+        Create all strings by randomly sampling from a pool of characters.
+    """
+
+    # If none specified, use all three
+    if True not in (let, num, sym):
+        let, num, sym = True, True, True
+
+    pool = ''
+
+    if num:
+        pool += "0123456789"
+    if sym:
+        pool += "!\"#$%&'()*+,-./:;?@[\\]^_`{|}~"
+
+
+    min_seq_len = 1
+    max_seq_len = 3
+
+    strings = []
+    for _ in range(0, count):
+        current_string = ""
+        for _ in range(0, rnd.randint(1, length) if allow_variable else length):
+            seq_len = rnd.randint(min_seq_len, max_seq_len)
+            current_string += ''.join([rnd.choice(pool) for _ in range(seq_len)])
+            seq_len2 = rnd.randint(1, 1)
+            if len(lang) >1 :
+                if rnd.random() > 0.5:
+                    current_string += ''.join([rnd.choice(lang[0]) for _ in range(seq_len2)])
+                else:
+                    current_string += ''.join([rnd.choice(lang[1]) for _ in range(seq_len2)])
+            else:
+                current_string += ''.join([rnd.choice(lang) for _ in range(seq_len2)])
             current_string += ' '
         strings.append(current_string[:-1])
     return strings

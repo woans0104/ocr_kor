@@ -109,6 +109,7 @@ def _join_images(images):
     return compound_image
 
 def generate(text, text_color):
+
     with open(os.path.join('handwritten_model', 'translation.pkl'), 'rb') as file:
         translation = pickle.load(file)
 

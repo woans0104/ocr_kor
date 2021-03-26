@@ -19,13 +19,16 @@ from utils import CTCLabelConverter, AttnLabelConverter, Averager
 from dataset import hierarchical_dataset, AlignCollate, Batch_Balanced_Dataset
 from model import Model
 from test import validation
-from apex.parallel import DistributedDataParallel as DDP
+#from apex.parallel import DistributedDataParallel as DDP
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def train(opt):
     """ dataset preparation """
     opt.select_data = opt.select_data.split('-')
     opt.batch_ratio = opt.batch_ratio.split('-')
+
+    #import ipdb;ipdb.set_trace()
+
     train_dataset = Batch_Balanced_Dataset(opt)
 
     AlignCollate_valid = AlignCollate(imgH=opt.imgH, imgW=opt.imgW, keep_ratio_with_pad=opt.PAD)
@@ -67,15 +70,16 @@ def train(opt):
             continue
 
     # data parallel for multi-GPU
-    # model = torch.nn.DataParallel(model).to(device)
-    model.cuda(opt.gpu)
-    model = DDP(model, delay_allreduce=True).to(device)
+
+    model = torch.nn.DataParallel(model).to(device)
     model.train()
+
+
     if opt.continue_model != '':
         print(f'loading pretrained model from {opt.continue_model}')
         model.load_state_dict(torch.load(opt.continue_model))
     print("Model:")
-    print(model)
+    #print(model)
 
     """ setup loss """
     if 'CTC' in opt.Prediction:
@@ -104,7 +108,7 @@ def train(opt):
 
     """ final options """
     # print(opt)
-    with open(f'./saved_models/{opt.experiment_name}/opt.txt', 'a') as opt_file:
+    with open(f'./saved_models/{opt.experiment_name}/opt.txt', 'a',encoding="utf-8") as opt_file:
         opt_log = '------------ Options -------------\n'
         args = vars(opt)
         for k, v in args.items():
@@ -127,12 +131,19 @@ def train(opt):
     while(True):
         # train part
         image_tensors, labels = train_dataset.get_batch()
+
+
+
         image = image_tensors.to(device)
         text, length = converter.encode(labels, batch_max_length=opt.batch_max_length)
         batch_size = image.size(0)
+        #import ipdb;ipdb.set_trace()
+
 
         if 'CTC' in opt.Prediction:
             preds = model(image, text).log_softmax(2)
+
+
             preds_size = torch.IntTensor([preds.size(1)] * batch_size).to(device)
             preds = preds.permute(1, 0, 2)  # to use CTCLoss format
 
@@ -143,7 +154,9 @@ def train(opt):
             torch.backends.cudnn.enabled = True
 
         else:
+
             preds = model(image, text[:, :-1]) # align with Attention.forward
+
             target = text[:, 1:]  # without [GO] Symbol
             cost = criterion(preds.view(-1, preds.shape[-1]), target.contiguous().view(-1))
 
@@ -159,7 +172,7 @@ def train(opt):
             elapsed_time = time.time() - start_time
             print(f'[{i}/{opt.num_iter}] Loss: {loss_avg.val():0.5f} elapsed_time: {elapsed_time:0.5f}')
             # for log
-            with open(f'./saved_models/{opt.experiment_name}/log_train.txt', 'a') as log:
+            with open(f'./saved_models/{opt.experiment_name}/log_train.txt', 'a',encoding="utf-8") as log:
                 log.write(f'[{i}/{opt.num_iter}] Loss: {loss_avg.val():0.5f} elapsed_time: {elapsed_time:0.5f}\n')
                 loss_avg.reset()
 
@@ -174,6 +187,8 @@ def train(opt):
                         pred = pred[:pred.find('[s]')]
                         gt = gt[:gt.find('[s]')]
                     print(f'{pred:20s}, gt: {gt:20s},   {str(pred == gt)}')
+                    #pred = pred.encode('utf-8')
+                    #gt = gt.encode('utf-8')
                     log.write(f'{pred:20s}, gt: {gt:20s},   {str(pred == gt)}\n')
 
                 valid_log = f'[{i}/{opt.num_iter}] valid loss: {valid_loss:0.5f}'
@@ -209,8 +224,8 @@ if __name__ == '__main__':
     parser.add_argument('--train_data', type=str, default='/nipa/Sunwoo/data/data_lmdb_release/training', help='path to training dataset')
     parser.add_argument('--valid_data', type=str, default='/nipa/Sunwoo/data/data_lmdb_release/validation', help='path to validation dataset')
     parser.add_argument('--manualSeed', type=int, default=1111, help='for random seed setting')
-    parser.add_argument('--workers', type=int, help='number of data loading workers', default=4)
-    parser.add_argument('--batch_size', type=int, default=192, help='input batch size')
+    parser.add_argument('--workers', type=int, help='number of data loading workers', default=0)
+    parser.add_argument('--batch_size', type=int, default=1, help='input batch size')
     parser.add_argument('--num_iter', type=int, default=300000, help='number of iterations to train for')
     parser.add_argument('--valInterval', type=int, default=2000, help='Interval between each validation')
     parser.add_argument('--continue_model', default='', help="path to model to continue training")
@@ -247,8 +262,8 @@ if __name__ == '__main__':
                         help='the number of output channel of Feature extractor')
     parser.add_argument('--hidden_size', type=int, default=256, help='the size of the LSTM hidden state')
 
-    parser.add_argument("--gpu_devices", type=int, nargs='+', default=None, help="")
-    parser.add_argument('--gpu', default=None, type=int, help='GPU id to use.')
+    parser.add_argument("--gpu_devices", type=int, nargs='+', default=0, help="")
+    parser.add_argument('--gpu', default=0, type=int, help='GPU id to use.',)
     parser.add_argument('--dist-url', default='tcp://127.0.0.1:3456', type=str, help='')
     parser.add_argument('--dist-backend', default='nccl', type=str, help='')
     parser.add_argument('--local_rank', default=0, type=int, help='')
@@ -257,13 +272,12 @@ if __name__ == '__main__':
 
     opt = parser.parse_args()
 
-    gpu_devices = ','.join([str(id) for id in opt.gpu_devices])
-    os.environ["CUDA_VISIBLE_DEVICES"] = gpu_devices
+
 
     if not opt.experiment_name:
         opt.experiment_name = f'{opt.Transformation}-{opt.FeatureExtraction}-{opt.SequenceModeling}-{opt.Prediction}'
         opt.experiment_name += f'-Seed{opt.manualSeed}'
-        # print(opt.experiment_name)
+
 
     os.makedirs(f'./saved_models/{opt.experiment_name}', exist_ok=True)
 
@@ -272,8 +286,10 @@ if __name__ == '__main__':
         # opt.character += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'
         opt.character = string.printable[:-6]  # same with ASTER setting (use 94 char).
 
+    #import ipdb;ipdb.set_trace()
+
     """ Seed and GPU setting """
-    # print("Random Seed: ", opt.manualSeed)
+    # # print("Random Seed: ", opt.manualSeed)
     random.seed(opt.manualSeed)
     np.random.seed(opt.manualSeed)
     torch.manual_seed(opt.manualSeed)
@@ -282,12 +298,7 @@ if __name__ == '__main__':
     cudnn.benchmark = True
     cudnn.deterministic = True
     opt.num_gpu = torch.cuda.device_count()
-    # print('device count', opt.num_gpu)
-    opt.gpu = opt.local_rank
-    torch.cuda.set_device(opt.gpu)
-    torch.distributed.init_process_group(backend='nccl',
-                                         init_method='env://')
-    opt.world_size = torch.distributed.get_world_size()
+
 
     if opt.num_gpu > 1:
         print('------ Use multi-GPU setting ------')

@@ -6,6 +6,9 @@ from PIL import Image, ImageFilter
 import computer_text_generator
 import background_generator
 import distorsion_generator
+from koToEng import kor2eng, KOR_ENG_TABLE
+
+
 try:
     import handwritten_text_generator
 except ImportError as e:
@@ -22,12 +25,36 @@ class FakeTextDataGenerator(object):
         cls.generate(*t)
 
     @classmethod
-    def generate(cls, index, text, font, out_dir, size, extension, skewing_angle, random_skew, blur, random_blur, background_type, distorsion_type, distorsion_orientation, is_handwritten, name_format, width, alignment, text_color, orientation, space_width, margins, fit):
-        image = None
+    def check_filename(cls,strings):
+        import re
+        pattern = re.compile(r'\s+')
+        strings = re.sub(pattern, '', strings)
 
+        num = "0123456789"
+        sym = "!\"#$%&'()*+,-./:;?@[\\]^_`{|}~"
+
+        filename = ''
+        for j in strings:
+            if j in num or j in sym:  # sym
+                pass
+            elif j.lower() != j.upper():  # eng
+                filename += j
+            else:
+                filename += "".join(KOR_ENG_TABLE[k] for k in kor2eng(j))  # kor
+
+        return filename
+
+    @classmethod
+    def generate(cls, index, text, font, out_dir, size, extension, skewing_angle, random_skew, blur, random_blur,
+                 background_type, distorsion_type, distorsion_orientation, is_handwritten, name_format, width, alignment,
+                 text_color, orientation, space_width, margins, fit, filename):
+        image = None
         margin_top, margin_left, margin_bottom, margin_right = margins
         horizontal_margin = margin_left + margin_right
         vertical_margin = margin_top + margin_bottom
+
+        print('+'*100)
+        print(font)
 
         ##########################
         # Create picture of text #
@@ -37,7 +64,12 @@ class FakeTextDataGenerator(object):
                 raise ValueError("Vertical handwritten text is unavailable")
             image = handwritten_text_generator.generate(text, text_color, fit)
         else:
+
             image = computer_text_generator.generate(text, font, text_color, size, orientation, space_width, fit)
+            print('*'*100)
+            print(text)
+            print(font)
+            print('*' * 100)
 
         random_angle = rnd.randint(0-skewing_angle, skewing_angle)
 
@@ -73,6 +105,7 @@ class FakeTextDataGenerator(object):
 
         # Horizontal text
         if orientation == 0:
+
             new_width = int(distorted_img.size[0] * (float(size - vertical_margin) / float(distorted_img.size[1])))
             resized_img = distorted_img.resize((new_width, size - vertical_margin), Image.ANTIALIAS)
             background_width = width if width > 0 else new_width + horizontal_margin
@@ -120,19 +153,28 @@ class FakeTextDataGenerator(object):
                 radius=(blur if not random_blur else rnd.randint(0, blur))
             )
         )
+        #print('*' * 50, image)
+        #print('*' * 50, name_format)
+        #print('*' * 50, out_dir)
 
         #####################################
         # Generate name for resulting image #
         #####################################
-        if name_format == 0:
-            image_name = '{}_{}.{}'.format(text, str(index), extension)
-        elif name_format == 1:
-            image_name = '{}_{}.{}'.format(str(index), text, extension)
-        elif name_format == 2:
-            image_name = '{}.{}'.format(str(index),extension)
-        else:
-            print('{} is not a valid name format. Using default.'.format(name_format))
-            image_name = '{}_{}.{}'.format(text, str(index), extension)
+
+        filename = FakeTextDataGenerator.check_filename(text)
+        image_name = '{}.{}'.format(filename, extension)
+
+        # if name_format == 0:
+        #     image_name = '{}_{}.{}'.format(filename, str(index), extension)
+        #     print('*' * 100, image_name)
+        # elif name_format == 1:
+        #     image_name = '{}_{}.{}'.format(str(index), text, extension)
+        # elif name_format == 2:
+        #     image_name = '{}.{}'.format(str(index),extension)
+        # else:
+        #     print('{} is not a valid name format. Using default.'.format(name_format))
+        #     image_name = '{}_{}.{}'.format(text, str(index), extension)
+
 
         # Save the image
         final_image.convert('RGB').save(os.path.join(out_dir, image_name))

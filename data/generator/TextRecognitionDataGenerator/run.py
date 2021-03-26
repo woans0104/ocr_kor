@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import argparse
 import os, errno
 import random as rnd
@@ -9,10 +11,14 @@ from string_generator import (
     create_strings_from_dict,
     create_strings_from_file,
     create_strings_from_wikipedia,
-    create_strings_randomly
+    create_strings_randomly,
+    create_strings_randomly_v2,
+    create_strings_from_dict_v2
 )
 from data_generator import FakeTextDataGenerator
 from multiprocessing import Pool
+from koToEng import kor2eng, KOR_ENG_TABLE
+
 
 def margins(margin):
     margins = margin.split(',')
@@ -45,7 +51,7 @@ def parse_arguments():
         "-l",
         "--language",
         type=str,
-        nargs="?",
+        nargs="+",
         help="The language to use, should be fr (French), en (English), es (Spanish), de (German), or cn (Chinese).",
         default="en"
     )
@@ -261,7 +267,14 @@ def parse_arguments():
         help="Define font to be used"
     )
 
-
+    parser.add_argument(
+        "-fn",
+        "--filename",
+        default="word",
+        type=str,
+        nargs="?",
+        help="Define filename to be used"
+    )
     return parser.parse_args()
 
 def load_dict(lang):
@@ -269,11 +282,16 @@ def load_dict(lang):
         Read the dictionnary file and returns all words in it.
     """
 
-    lang_dict = []
-    with open(os.path.join('dicts', lang + '.txt'), 'r', encoding="utf8", errors='ignore') as d:
-        lang_dict = [l for l in d.read().splitlines() if len(l) > 0]
-    return lang_dict
+    if lang == 'ko':
 
+        with open(os.path.join('dicts', lang + '_prescription.txt'), 'r', encoding="utf8", errors='ignore') as d:
+            lang_dict = [l for l in d.read().splitlines() if len(l) > 0]
+        return lang_dict
+    else:
+
+        with open(os.path.join('dicts', lang + '_prescription.txt'), 'r', errors='ignore') as d:
+            lang_dict = [l for l in d.read().splitlines() if len(l) > 0]
+        return lang_dict
 def load_fonts(lang):
     """
         Load all fonts in the fonts directories
@@ -282,9 +300,33 @@ def load_fonts(lang):
     if lang == 'cn':
         return [os.path.join('fonts/cn', font) for font in os.listdir('fonts/cn')]
     elif lang == 'ko':
-        return [os.path.join('fonts/ko', font) for font in os.listdir('fonts/ko')]
+        return [os.path.join('fonts/ko2', font) for font in os.listdir('fonts/ko2')]
     else:
+
         return [os.path.join('fonts/latin', font) for font in os.listdir('fonts/latin')]
+
+
+def check_filename(strings):
+    import re
+    pattern = re.compile(r'\s+')
+    strings = re.sub(pattern, '', strings)
+    num = "0123456789"
+    sym = "!\"#$%&'()*+,-./:;?@[\\]^_`{|}~"
+
+
+    filename = ''
+    for j in strings:
+        if j in num or j in sym: # sym
+            pass
+        elif j.lower() != j.upper(): # eng
+            filename+= j
+        else:
+            filename += "".join(KOR_ENG_TABLE[k] for k in kor2eng(j)) # kor
+
+    return filename
+
+
+
 
 def main():
     """
@@ -302,32 +344,55 @@ def main():
             raise
 
     # Creating word list
-    lang_dict = load_dict(args.language)
 
-    # Create font (path) list
-    if not args.font:
-        fonts = load_fonts(args.language)
-    else:
-        if os.path.isfile(args.font):
-            fonts = [args.font]
-        else:
-            sys.exit("Cannot open font")
-
-    # Creating synthetic sentences (or word)
     strings = []
+    fonts = []
+    lang_dicts = []
+    for lan in args.language:
 
-    if args.use_wikipedia:
-        strings = create_strings_from_wikipedia(args.length, args.count, args.language)
-    elif args.input_file != '':
-        strings = create_strings_from_file(args.input_file, args.count)
-    elif args.random_sequences:
-        strings = create_strings_randomly(args.length, args.random, args.count,
-                                          args.include_letters, args.include_numbers, args.include_symbols, args.language)
-        # Set a name format compatible with special characters automatically if they are used
-        if args.include_symbols or True not in (args.include_letters, args.include_numbers, args.include_symbols):
-            args.name_format = 2
+        lang_dict = load_dict(lan)
+        lang_dicts.append(lang_dict)
+
+        # Create font (path) list
+        if not args.font:
+            font = load_fonts(lan)
+            fonts.append(font)
+        else:
+            if os.path.isfile(args.font):
+                fonts = [args.font]
+            else:
+                sys.exit("Cannot open font")
+
+        # Creating synthetic sentences (or word)
+
+
+    if len(lang_dicts) >1 :
+
+        strings += create_strings_from_dict_v2(args.length, args.random, args.count, lang_dicts)
+
     else:
-        strings = create_strings_from_dict(args.length, args.random, args.count, lang_dict)
+
+        strings += create_strings_from_dict(args.length, args.random, args.count, lang_dicts)
+
+    if args.random_sequences:
+        strings += create_strings_randomly_v2(args.length, args.random, args.count,
+                                          args.include_letters, args.include_numbers, args.include_symbols, lang_dicts)
+
+
+
+    # if args.use_wikipedia:
+    #     strings = create_strings_from_wikipedia(args.length, args.count,lan)
+    # elif args.input_file != '':
+    #     strings = create_strings_from_file(args.input_file, args.count)
+    # elif args.random_sequences:
+    #     strings += create_strings_randomly(args.length, args.random, args.count,
+    #                                       args.include_letters, args.include_numbers, args.include_symbols, lan)
+    #     # Set a name format compatible with special characters automatically if they are used
+    #     if args.include_symbols or True not in (args.include_letters, args.include_numbers, args.include_symbols):
+    #         args.name_format = 2
+    # else:
+    #     strings += create_strings_from_dict(args.length, args.random, args.count, lang_dicts)
+
 
 
     string_count = len(strings)
@@ -338,7 +403,9 @@ def main():
         zip(
             [i for i in range(0, string_count)],
             strings,
-            [fonts[rnd.randrange(0, len(fonts))] for _ in range(0, string_count)],
+            [fonts[0][rnd.randrange(0, len(fonts[0]))] if len(fonts)==1
+             else [fonts[0][rnd.randrange(0, len(fonts[0]))],fonts[1][rnd.randrange(0, len(fonts[0]))]]
+             for _ in range(0, string_count)],
             [args.output_dir] * string_count,
             [args.format] * string_count,
             [args.extension] * string_count,
@@ -357,18 +424,42 @@ def main():
             [args.orientation] * string_count,
             [args.space_width] * string_count,
             [args.margins] * string_count,
-            [args.fit] * string_count
+            [args.fit] * string_count,
+            [args.filename]* string_count
         )
     ), total=args.count):
         pass
     p.terminate()
 
-    if args.name_format == 2:
+
+    #make label
+    if args.name_format == 0:
         # Create file with filename-to-label connections
-        with open(os.path.join(args.output_dir, "labels.txt"), 'w', encoding="utf8") as f:
+        with open(os.path.join(args.output_dir, "gt_label.txt"), 'w', encoding="utf8") as f:
             for i in range(string_count):
-                file_name = str(i) + "." + args.extension
-                f.write("{} {}\n".format(file_name, strings[i]))
+                filename = check_filename(strings[i])
+                file_name = "{}/{}".format(args.output_dir,filename) + "." + args.extension
+                f.write("{}\t{}\n".format(file_name, strings[i]))
+        f.close()
+
+
+    # #make label
+    # if args.name_format == 0:
+    #     # Create file with filename-to-label connections
+    #     with open(os.path.join(args.output_dir, "gt_label.txt"), 'w', encoding="utf8") as f:
+    #         for i in range(string_count):
+    #             file_name = "{}/{}".format(args.output_dir,filename)+ str(i) + "." + args.extension
+    #             f.write("{}\t{}\n".format(file_name, strings[i]))
+    #     f.close()
+    #
+
+
+    # elif args.name_format == 2:
+    #     # Create file with filename-to-label connections
+    #     with open(os.path.join(args.output_dir, "labels.txt"), 'w', encoding="utf8") as f:
+    #         for i in range(string_count):
+    #             file_name = str(i) + "." + args.extension
+    #             f.write("{} {}\n".format(file_name, strings[i]))
 
 if __name__ == '__main__':
     main()

@@ -1,5 +1,5 @@
 """ a modified version of CRNN torch repository https://github.com/bgshih/crnn/blob/master/tool/create_dataset.py """
-
+#-*- encoding: utf8 -*-
 import fire
 import os
 import lmdb
@@ -35,7 +35,10 @@ def createDataset(inputPath, gtFile, outputPath, checkValid=True):
         checkValid : if true, check the validity of every image
     """
     os.makedirs(outputPath, exist_ok=True)
-    env = lmdb.open(outputPath, map_size=1099511627776)
+
+    env = lmdb.open(outputPath, map_size=1099511627776/1024) #window
+    #env = lmdb.open(outputPath, map_size=1099511627776)  # ubuntu
+
     cache = {}
     cnt = 1
 
@@ -44,17 +47,21 @@ def createDataset(inputPath, gtFile, outputPath, checkValid=True):
 
     nSamples = len(datalist)
     for i in range(nSamples):
+
         imagePath, label = datalist[i].strip('\n').split('\t')
+        #import ipdb;
+        #ipdb.set_trace()
         imagePath = os.path.join(inputPath, imagePath)
 
         # # only use alphanumeric data
         # if re.search('[^a-zA-Z0-9]', label):
         #     continue
-
-        if not os.path.exists(imagePath):
-            print('%s does not exist' % imagePath)
-            continue
-        with open(imagePath, 'rb') as f:
+        #import ipdb;ipdb.set_trace()
+        if not os.path.exists('{}'.format(imagePath)):
+             print('gigi')
+             print('%s does not exist' % imagePath)
+             continue
+        with open(u'{}'.format(imagePath), 'rb') as f:
             imageBin = f.read()
         if checkValid:
             try:
